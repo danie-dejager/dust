@@ -32,20 +32,19 @@ strip target/release/%{name}
 %install
 # Create the necessary directory structure in the buildroot
 mkdir -p %{buildroot}/bin
-mkdir -p %{buildroot}/usr/share/man/man1
+mkdir -p %{buildroot}/etc/bash_completion.d/
 
 # Copy the binary to /bin in the buildroot
 install -m 755 target/release/%{name} %{buildroot}/bin/
 
-# Copy the man page to /usr/share/man/man1 in the buildroot
-gzip gen/%{name}.1
-install -m 644 gen/%{name}.1.gz %{buildroot}/usr/share/man/man1/
+# Copy Bash completion
+install -m 755 completions/%{name}.bash %{buildroot}/etc/bash_completion.d/
 
 %files
 # List all the files to be included in the package
-/bin/sd
-/usr/share/man/man1/%{name}.1.gz
+/bin/%{name}
+/etc/bash_completion.d/%{name}.bash
 
 %changelog
 * Wed Aug 14 2024 Danie de Jager - 1.1.1-1
-- Built using rustc 1.80
+- Built using rustc 1.80.1
