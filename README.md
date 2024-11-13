@@ -27,17 +27,27 @@ Because I want an easy way to see where my disk is being used.
 
 - `brew install dust`
 
+#### [Snap](https://ubuntu.com/core/services/guide/snaps-intro) Ubuntu and [supported systems](https://snapcraft.io/docs/installing-snapd)
+
+- `snap install dust`
+
+Note: `dust` installed through `snap` can only access files stored in the `/home` directory. See daniejstriata/dust-snap#2 for more information.
+
 #### [Pacstall](https://github.com/pacstall/pacstall) (Debian/Ubuntu)
 
 - `pacstall -I dust-bin`
 
-### Anaconda (conda-forge)
+#### Anaconda (conda-forge)
 
 - `conda install -c conda-forge dust`
 
 #### [deb-get](https://github.com/wimpysworld/deb-get) (Debian/Ubuntu)
 
 - `deb-get install du-dust`
+
+#### [x-cmd](https://www.x-cmd.com/pkg/#VPContent)
+
+- `x env use dust`
 
 #### Windows:
 
