@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::fs;
+use std::io::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -14,6 +15,7 @@ use crate::utils::is_filtered_out_due_to_regex;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 use regex::Regex;
+use std::path::Path;
 use std::path::PathBuf;
 
 use std::collections::HashSet;
@@ -25,7 +27,7 @@ use crate::node::FileTime;
 use crate::platform::get_metadata;
 
 #[derive(Debug)]
-pub enum Operater {
+pub enum Operator {
     Equal = 0,
     LessThan = 1,
     GreaterThan = 2,
@@ -36,9 +38,9 @@ pub struct WalkData<'a> {
     pub filter_regex: &'a [Regex],
     pub invert_filter_regex: &'a [Regex],
     pub allowed_filesystems: HashSet<u64>,
-    pub filter_modified_time: Option<(Operater, i64)>,
-    pub filter_accessed_time: Option<(Operater, i64)>,
-    pub filter_changed_time: Option<(Operater, i64)>,
+    pub filter_modified_time: Option<(Operator, i64)>,
+    pub filter_accessed_time: Option<(Operator, i64)>,
+    pub filter_changed_time: Option<(Operator, i64)>,
     pub use_apparent_size: bool,
     pub by_filecount: bool,
     pub by_filetime: &'a Option<FileTime>,
@@ -126,8 +128,7 @@ fn sort_by_inode(a: &Node, b: &Node) -> std::cmp::Ordering {
 fn ignore_file(entry: &DirEntry, walk_data: &WalkData) -> bool {
     let is_dot_file = entry.file_name().to_str().unwrap_or("").starts_with('.');
     let is_ignored_path = walk_data.ignore_directories.contains(&entry.path());
-    let follow_links =
-        walk_data.follow_links && entry.file_type().map_or(false, |ft| ft.is_symlink());
+    let follow_links = walk_data.follow_links && entry.file_type().is_ok_and(|ft| ft.is_symlink());
 
     if !walk_data.allowed_filesystems.is_empty() {
         let size_inode_device = get_metadata(entry.path(), false, follow_links);
@@ -230,8 +231,9 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                                 }
                             }
                             Err(ref failed) => {
-                                let mut editable_error = errors.lock().unwrap();
-                                editable_error.no_permissions.insert(failed.to_string());
+                                if handle_error_and_retry(failed, &dir, walk_data) {
+                                    return walk(dir.clone(), walk_data, depth);
+                                }
                             }
                         }
                         None
@@ -239,21 +241,11 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                     .collect()
             }
             Err(failed) => {
-                let mut editable_error = errors.lock().unwrap();
-                match failed.kind() {
-                    std::io::ErrorKind::PermissionDenied => {
-                        editable_error
-                            .no_permissions
-                            .insert(dir.to_string_lossy().into());
-                    }
-                    std::io::ErrorKind::NotFound => {
-                        editable_error.file_not_found.insert(failed.to_string());
-                    }
-                    _ => {
-                        editable_error.unknown_error.insert(failed.to_string());
-                    }
+                if handle_error_and_retry(&failed, &dir, walk_data) {
+                    return walk(dir, walk_data, depth);
+                } else {
+                    vec![]
                 }
-                vec![]
             }
         }
     } else {
@@ -273,6 +265,38 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
         false
     };
     build_node(dir, children, is_symlink, false, depth, walk_data)
+}
+
+fn handle_error_and_retry(failed: &Error, dir: &Path, walk_data: &WalkData) -> bool {
+    let mut editable_error = walk_data.errors.lock().unwrap();
+    match failed.kind() {
+        std::io::ErrorKind::PermissionDenied => {
+            editable_error
+                .no_permissions
+                .insert(dir.to_string_lossy().into());
+        }
+        std::io::ErrorKind::InvalidInput => {
+            editable_error
+                .no_permissions
+                .insert(dir.to_string_lossy().into());
+        }
+        std::io::ErrorKind::NotFound => {
+            editable_error.file_not_found.insert(failed.to_string());
+        }
+        std::io::ErrorKind::Interrupted => {
+            let mut editable_error = walk_data.errors.lock().unwrap();
+            editable_error.interrupted_error += 1;
+            if editable_error.interrupted_error > 3 {
+                panic!("Multiple Interrupted Errors occurred while scanning filesystem. Aborting");
+            } else {
+                return true;
+            }
+        }
+        _ => {
+            editable_error.unknown_error.insert(failed.to_string());
+        }
+    }
+    false
 }
 
 mod tests {
@@ -300,9 +324,9 @@ mod tests {
             filter_regex: &[],
             invert_filter_regex: &[],
             allowed_filesystems: HashSet::new(),
-            filter_modified_time: Some((Operater::GreaterThan, 0)),
-            filter_accessed_time: Some((Operater::GreaterThan, 0)),
-            filter_changed_time: Some((Operater::GreaterThan, 0)),
+            filter_modified_time: Some((Operator::GreaterThan, 0)),
+            filter_accessed_time: Some((Operator::GreaterThan, 0)),
+            filter_changed_time: Some((Operator::GreaterThan, 0)),
             use_apparent_size,
             by_filecount: false,
             by_filetime: &None,

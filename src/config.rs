@@ -8,14 +8,13 @@ use std::io::IsTerminal;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::dir_walker::Operater;
+use crate::dir_walker::Operator;
 use crate::display::get_number_format;
 
 pub static DAY_SECONDS: i64 = 24 * 60 * 60;
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
 pub struct Config {
     pub display_full_paths: Option<bool>,
     pub display_apparent_size: Option<bool>,
@@ -160,21 +159,21 @@ impl Config {
         Some(true) == self.output_json || options.get_flag("output_json")
     }
 
-    pub fn get_modified_time_operator(&self, options: &ArgMatches) -> Option<(Operater, i64)> {
+    pub fn get_modified_time_operator(&self, options: &ArgMatches) -> Option<(Operator, i64)> {
         get_filter_time_operator(
             options.get_one::<String>("mtime"),
             get_current_date_epoch_seconds(),
         )
     }
 
-    pub fn get_accessed_time_operator(&self, options: &ArgMatches) -> Option<(Operater, i64)> {
+    pub fn get_accessed_time_operator(&self, options: &ArgMatches) -> Option<(Operator, i64)> {
         get_filter_time_operator(
             options.get_one::<String>("atime"),
             get_current_date_epoch_seconds(),
         )
     }
 
-    pub fn get_changed_time_operator(&self, options: &ArgMatches) -> Option<(Operater, i64)> {
+    pub fn get_changed_time_operator(&self, options: &ArgMatches) -> Option<(Operator, i64)> {
         get_filter_time_operator(
             options.get_one::<String>("ctime"),
             get_current_date_epoch_seconds(),
@@ -183,7 +182,7 @@ impl Config {
 }
 
 fn get_current_date_epoch_seconds() -> i64 {
-    // calcurate current date epoch seconds
+    // calculate current date epoch seconds
     let now = Local::now();
     let current_date = now.date_naive();
 
@@ -197,7 +196,7 @@ fn get_current_date_epoch_seconds() -> i64 {
 fn get_filter_time_operator(
     option_value: Option<&String>,
     current_date_epoch_seconds: i64,
-) -> Option<(Operater, i64)> {
+) -> Option<(Operator, i64)> {
     match option_value {
         Some(val) => {
             let time = current_date_epoch_seconds
@@ -207,9 +206,9 @@ fn get_filter_time_operator(
                     .abs()
                     * DAY_SECONDS;
             match val.chars().next().expect("Value should not be empty") {
-                '+' => Some((Operater::LessThan, time - DAY_SECONDS)),
-                '-' => Some((Operater::GreaterThan, time)),
-                _ => Some((Operater::Equal, time - DAY_SECONDS)),
+                '+' => Some((Operator::LessThan, time - DAY_SECONDS)),
+                '-' => Some((Operator::GreaterThan, time)),
+                _ => Some((Operator::Equal, time - DAY_SECONDS)),
             }
         }
         None => None,
@@ -231,7 +230,7 @@ fn convert_min_size(input: &str) -> Option<usize> {
                 match number_format {
                     Some((multiple, _)) => Some(parsed_digits * (multiple as usize)),
                     None => {
-                        if letters.eq("") {
+                        if letters.is_empty() {
                             Some(parsed_digits)
                         } else {
                             eprintln!("Ignoring invalid min-size: {input}");
@@ -254,12 +253,29 @@ fn get_config_locations(base: &Path) -> Vec<PathBuf> {
     ]
 }
 
-pub fn get_config() -> Config {
-    if let Some(home) = directories::BaseDirs::new() {
-        for path in get_config_locations(home.home_dir()) {
+pub fn get_config(conf_path: Option<String>) -> Config {
+    match conf_path {
+        Some(path_str) => {
+            let path = Path::new(&path_str);
             if path.exists() {
-                if let Ok(config) = Config::from_config_file(path) {
-                    return config;
+                match Config::from_config_file(path) {
+                    Ok(config) => return config,
+                    Err(e) => {
+                        eprintln!("Ignoring invalid config file '{}': {}", &path.display(), e)
+                    }
+                }
+            } else {
+                eprintln!("Config file {:?} doesn't exists", &path.display());
+            }
+        }
+        None => {
+            if let Some(home) = directories::BaseDirs::new() {
+                for path in get_config_locations(home.home_dir()) {
+                    if path.exists() {
+                        if let Ok(config) = Config::from_config_file(&path) {
+                            return config;
+                        }
+                    }
                 }
             }
         }

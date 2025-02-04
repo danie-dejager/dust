@@ -25,6 +25,15 @@ pub fn build_cli() -> Command {
                 .num_args(1)
         )
         .arg(
+            Arg::new("config")
+                .long("config")
+                .help("Specify a config file to use")
+                .value_name("FILE")
+                .value_hint(clap::ValueHint::FilePath)
+                .value_parser(value_parser!(String))
+                .num_args(1)
+        )
+        .arg(
             Arg::new("number_of_lines")
                 .short('n')
                 .long("number-of-lines")
@@ -47,7 +56,7 @@ pub fn build_cli() -> Command {
                 .value_name("PATH")
                 .value_hint(clap::ValueHint::AnyPath)
                 .action(clap::ArgAction::Append)
-                .help("Exclude any file or directory with this name"),
+                .help("Exclude any file or directory with this path"),
         )
         .arg(
             Arg::new("ignore_all_in_file")
@@ -293,6 +302,14 @@ pub fn build_cli() -> Command {
                 .value_parser(value_parser!(String))
                 .num_args(1)
                 .help("run dust on NUL-terminated file names specified in file; if argument is -, then read names from standard input"),
+        )
+        .arg(
+            Arg::new("collapse")
+                .long("collapse")
+                .value_hint(clap::ValueHint::AnyPath)
+                .value_parser(value_parser!(String))
+                .action(clap::ArgAction::Append)
+                .help("Keep these directories collapsed"),
         )
         .arg(
             Arg::new("filetime")

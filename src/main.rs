@@ -33,6 +33,7 @@ use sysinfo::{System, SystemExt};
 use self::display::draw_it;
 use config::get_config;
 use dir_walker::walk_it;
+use display_node::OUTPUT_TYPE;
 use filter::get_biggest;
 use filter_type::get_all_file_types;
 use regex::Regex;
@@ -112,7 +113,7 @@ fn get_regex_value(maybe_value: Option<ValuesRef<String>>) -> Vec<Regex> {
 
 fn main() {
     let options = build_cli().get_matches();
-    let config = get_config();
+    let config = get_config(options.get_one::<String>("config").cloned());
 
     let errors = RuntimeErrors::default();
     let error_listen_for_ctrlc = Arc::new(Mutex::new(errors));
@@ -243,6 +244,19 @@ fn main() {
         indicator.spawn(output_format.clone())
     }
 
+    let keep_collapsed: HashSet<PathBuf> = match options.get_many::<String>("collapse") {
+        Some(collapse) => {
+            let mut combined_dirs = HashSet::new();
+            for collapse_dir in collapse {
+                for target_dir in target_dirs.iter() {
+                    combined_dirs.insert(PathBuf::from(target_dir).join(collapse_dir));
+                }
+            }
+            combined_dirs
+        }
+        None => HashSet::new(),
+    };
+
     let filter_modified_time = config.get_modified_time_operator(&options);
     let filter_accessed_time = config.get_accessed_time_operator(&options);
     let filter_changed_time = config.get_changed_time_operator(&options);
@@ -280,7 +294,7 @@ fn main() {
                 depth,
                 using_a_filter: !filter_regexs.is_empty() || !invert_filter_regexs.is_empty(),
             };
-            get_biggest(top_level_nodes, agg_data, &by_filetime)
+            get_biggest(top_level_nodes, agg_data, &by_filetime, keep_collapsed)
         }
     };
 
@@ -327,20 +341,23 @@ fn main() {
     }
 
     if let Some(root_node) = tree {
-        let idd = InitialDisplayData {
-            short_paths: !config.get_full_paths(&options),
-            is_reversed: !config.get_reverse(&options),
-            colors_on: is_colors,
-            by_filecount,
-            by_filetime,
-            is_screen_reader: config.get_screen_reader(&options),
-            output_format,
-            bars_on_right: config.get_bars_on_right(&options),
-        };
-
         if config.get_output_json(&options) {
+            OUTPUT_TYPE.with(|wrapped| {
+                wrapped.replace(output_format);
+            });
             println!("{}", serde_json::to_string(&root_node).unwrap());
         } else {
+            let idd = InitialDisplayData {
+                short_paths: !config.get_full_paths(&options),
+                is_reversed: !config.get_reverse(&options),
+                colors_on: is_colors,
+                by_filecount,
+                by_filetime,
+                is_screen_reader: config.get_screen_reader(&options),
+                output_format,
+                bars_on_right: config.get_bars_on_right(&options),
+            };
+
             draw_it(
                 idd,
                 config.get_no_bars(&options),
