@@ -5,10 +5,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::node::Node;
+use crate::progress::ORDERING;
 use crate::progress::Operation;
 use crate::progress::PAtomicInfo;
 use crate::progress::RuntimeErrors;
-use crate::progress::ORDERING;
 use crate::utils::is_filtered_out_due_to_file_time;
 use crate::utils::is_filtered_out_due_to_invert_regex;
 use crate::utils::is_filtered_out_due_to_regex;
@@ -125,9 +125,33 @@ fn sort_by_inode(a: &Node, b: &Node) -> std::cmp::Ordering {
     }
 }
 
+// Check if `path` is inside ignored directory
+fn is_ignored_path(path: &Path, walk_data: &WalkData) -> bool {
+    if walk_data.ignore_directories.contains(path) {
+        return true;
+    }
+
+    // Entry is inside an ignored absolute path
+    // Absolute paths should be canonicalized before being added to `WalkData.ignore_directories`
+    for ignored_path in walk_data.ignore_directories.iter() {
+        if !ignored_path.is_absolute() {
+            continue;
+        }
+        let absolute_entry_path = std::fs::canonicalize(path).unwrap_or_default();
+        if absolute_entry_path.starts_with(ignored_path) {
+            return true;
+        }
+    }
+
+    false
+}
+
 fn ignore_file(entry: &DirEntry, walk_data: &WalkData) -> bool {
+    if is_ignored_path(&entry.path(), walk_data) {
+        return true;
+    }
+
     let is_dot_file = entry.file_name().to_str().unwrap_or("").starts_with('.');
-    let is_ignored_path = walk_data.ignore_directories.contains(&entry.path());
     let follow_links = walk_data.follow_links && entry.file_type().is_ok_and(|ft| ft.is_symlink());
 
     if !walk_data.allowed_filesystems.is_empty() {
@@ -175,16 +199,12 @@ fn ignore_file(entry: &DirEntry, walk_data: &WalkData) -> bool {
         return true;
     }
 
-    (is_dot_file && walk_data.ignore_hidden) || is_ignored_path
+    is_dot_file && walk_data.ignore_hidden
 }
 
 fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
     let prog_data = &walk_data.progress_data;
     let errors = &walk_data.errors;
-
-    if errors.lock().unwrap().abort {
-        return None;
-    }
 
     let children = if dir.is_dir() {
         let read_dir = fs::read_dir(&dir);

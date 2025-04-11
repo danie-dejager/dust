@@ -10,6 +10,9 @@ use std::str;
 
 fn build_command<T: AsRef<OsStr>>(command_args: Vec<T>) -> String {
     let mut cmd = &mut Command::cargo_bin("dust").unwrap();
+    // Hide progress bar
+    cmd = cmd.arg("-P");
+
     for p in command_args {
         cmd = cmd.arg(p);
     }
@@ -260,4 +263,20 @@ pub fn test_collapse() {
     let output = build_command(vec!["--collapse", "many", "tests/test_dir/"]);
     assert!(output.contains("many"));
     assert!(!output.contains("hello_file"));
+}
+
+#[test]
+pub fn test_handle_duplicate_names() {
+    // Check that even if we run on a multiple directories with the same name
+    // we still show the distinct parent dir in the output
+    let output = build_command(vec![
+        "tests/test_dir_matching/dave/dup_name",
+        "tests/test_dir_matching/andy/dup_name",
+        "ci",
+    ]);
+    assert!(output.contains("andy"));
+    assert!(output.contains("dave"));
+    assert!(output.contains("ci"));
+    assert!(output.contains("dup_name"));
+    assert!(!output.contains("test_dir_matching"));
 }

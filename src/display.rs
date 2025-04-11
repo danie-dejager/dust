@@ -71,11 +71,7 @@ impl DisplayData {
 
     fn percent_size(&self, node: &DisplayNode) -> f32 {
         let result = node.size as f32 / self.base_size as f32;
-        if result.is_normal() {
-            result
-        } else {
-            0.0
-        }
+        if result.is_normal() { result } else { 0.0 }
     }
 }
 
@@ -273,7 +269,7 @@ fn clean_indentation_string(s: &str) -> String {
     is
 }
 
-fn get_printable_name<P: AsRef<Path>>(dir_name: &P, short_paths: bool) -> String {
+pub fn get_printable_name<P: AsRef<Path>>(dir_name: &P, short_paths: bool) -> String {
     let dir_name = dir_name.as_ref();
     let printable_name = {
         if short_paths {

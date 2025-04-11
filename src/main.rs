@@ -24,11 +24,10 @@ use std::fs::read_to_string;
 use std::io;
 use std::panic;
 use std::process;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use sysinfo::{System, SystemExt};
+use utils::canonicalize_absolute_path;
 
 use self::display::draw_it;
 use config::get_config;
@@ -39,7 +38,7 @@ use filter_type::get_all_file_types;
 use regex::Regex;
 use std::cmp::max;
 use std::path::PathBuf;
-use terminal_size::{terminal_size, Height, Width};
+use terminal_size::{Height, Width, terminal_size};
 use utils::get_filesystem_devices;
 use utils::simplify_dir_names;
 
@@ -118,20 +117,13 @@ fn main() {
     let errors = RuntimeErrors::default();
     let error_listen_for_ctrlc = Arc::new(Mutex::new(errors));
     let errors_for_rayon = error_listen_for_ctrlc.clone();
-    let errors_final = error_listen_for_ctrlc.clone();
-    let is_in_listing = Arc::new(AtomicBool::new(false));
-    let cloned_is_in_listing = Arc::clone(&is_in_listing);
 
     ctrlc::set_handler(move || {
-        error_listen_for_ctrlc.lock().unwrap().abort = true;
         println!("\nAborting");
-        if cloned_is_in_listing.load(Ordering::Relaxed) {
-            process::exit(1);
-        }
+        process::exit(1);
     })
     .expect("Error setting Ctrl-C handler");
 
-    is_in_listing.store(true, Ordering::Relaxed);
     let target_dirs = match config.get_files_from(&options) {
         Some(path) => {
             if path == "-" {
@@ -161,7 +153,6 @@ fn main() {
             None => vec![".".to_owned()],
         },
     };
-    is_in_listing.store(false, Ordering::Relaxed);
 
     let summarize_file_types = options.get_flag("types");
 
@@ -198,6 +189,7 @@ fn main() {
         Some(values) => values
             .map(|v| v.as_str())
             .map(PathBuf::from)
+            .map(canonicalize_absolute_path)
             .collect::<Vec<PathBuf>>(),
         None => vec![],
     };
@@ -293,6 +285,7 @@ fn main() {
                 number_of_lines,
                 depth,
                 using_a_filter: !filter_regexs.is_empty() || !invert_filter_regexs.is_empty(),
+                short_paths: !config.get_full_paths(&options),
             };
             get_biggest(top_level_nodes, agg_data, &by_filetime, keep_collapsed)
         }
@@ -300,10 +293,6 @@ fn main() {
 
     // Must have stopped indicator before we print to stderr
     indicator.stop();
-
-    if errors_final.lock().unwrap().abort {
-        return;
-    }
 
     let final_errors = walk_data.errors.lock().unwrap();
     if !final_errors.file_not_found.is_empty() {
