@@ -11,6 +11,9 @@ mod progress;
 mod utils;
 
 use crate::cli::Cli;
+use crate::config::Config;
+use crate::display_node::DisplayNode;
+use crate::node::FileTime;
 use crate::progress::RuntimeErrors;
 use clap::Parser;
 use dir_walker::WalkData;
@@ -295,7 +298,60 @@ fn main() {
     // Must have stopped indicator before we print to stderr
     indicator.stop();
 
-    let final_errors = walk_data.errors.lock().unwrap();
+    let print_errors = config.get_print_errors(&options);
+    print_any_errors(print_errors, walk_data.errors);
+
+    print_output(
+        config,
+        options,
+        tree,
+        walk_data.by_filecount,
+        by_filetime,
+        is_colors,
+        terminal_width,
+    )
+}
+
+fn print_output(
+    config: Config,
+    options: Cli,
+    tree: DisplayNode,
+    by_filecount: bool,
+    by_filetime: Option<FileTime>,
+    is_colors: bool,
+    terminal_width: usize,
+) {
+    let output_format = config.get_output_format(&options);
+
+    if config.get_output_json(&options) {
+        OUTPUT_TYPE.with(|wrapped| {
+            wrapped.replace(output_format);
+        });
+        println!("{}", serde_json::to_string(&tree).unwrap());
+    } else {
+        let idd = InitialDisplayData {
+            short_paths: !config.get_full_paths(&options),
+            is_reversed: !config.get_reverse(&options),
+            colors_on: is_colors,
+            by_filecount,
+            by_filetime,
+            is_screen_reader: config.get_screen_reader(&options),
+            output_format,
+            bars_on_right: config.get_bars_on_right(&options),
+        };
+
+        draw_it(
+            idd,
+            &tree,
+            config.get_no_bars(&options),
+            terminal_width,
+            config.get_skip_total(&options),
+        )
+    }
+}
+
+fn print_any_errors(print_errors: bool, errors: Arc<Mutex<RuntimeErrors>>) {
+    let final_errors = errors.lock().unwrap();
     if !final_errors.file_not_found.is_empty() {
         let err = final_errors
             .file_not_found
@@ -306,7 +362,7 @@ fn main() {
         eprintln!("No such file or directory: {}", err);
     }
     if !final_errors.no_permissions.is_empty() {
-        if config.get_print_errors(&options) {
+        if print_errors {
             let err = final_errors
                 .no_permissions
                 .iter()
@@ -328,34 +384,6 @@ fn main() {
             .collect::<Vec<&str>>()
             .join(", ");
         eprintln!("Unknown Error: {}", err);
-    }
-
-    if let Some(root_node) = tree {
-        if config.get_output_json(&options) {
-            OUTPUT_TYPE.with(|wrapped| {
-                wrapped.replace(output_format);
-            });
-            println!("{}", serde_json::to_string(&root_node).unwrap());
-        } else {
-            let idd = InitialDisplayData {
-                short_paths: !config.get_full_paths(&options),
-                is_reversed: !config.get_reverse(&options),
-                colors_on: is_colors,
-                by_filecount,
-                by_filetime,
-                is_screen_reader: config.get_screen_reader(&options),
-                output_format,
-                bars_on_right: config.get_bars_on_right(&options),
-            };
-
-            draw_it(
-                idd,
-                config.get_no_bars(&options),
-                terminal_width,
-                &root_node,
-                config.get_skip_total(&options),
-            )
-        }
     }
 }
 
