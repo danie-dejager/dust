@@ -1,5 +1,5 @@
 %define name dust
-%define version 1.2.1
+%define version 1.2.2
 %define release 1%{?dist}
 
 Summary:  A more intuitive version of du in rust
@@ -46,6 +46,7 @@ install -m 755 completions/%{name}.bash %{buildroot}/etc/bash_completion.d/
 /etc/bash_completion.d/%{name}.bash
 
 %changelog
+* Wed Jul 23 2025 - Danie de Jager - 1.2.2-1
 * Wed Jun 18 2025 - Danie de Jager - 1.2.1-1
 * Sun Apr 20 2025 - Danie de Jager - 1.2.0-1
 - Built using rustc 1.86.0
