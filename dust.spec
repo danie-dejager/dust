@@ -47,6 +47,7 @@ install -m 755 completions/%{name}.bash %{buildroot}/etc/bash_completion.d/
 /etc/bash_completion.d/%{name}.bash
 
 %changelog
+* Tue Dec 2 2025 - Danie de Jager - 1.2.3-2
 * Wed Aug 6 2025 - Danie de Jager - 1.2.3-1
 * Wed Jul 23 2025 - Danie de Jager - 1.2.2-1
 * Wed Jun 18 2025 - Danie de Jager - 1.2.1-1
