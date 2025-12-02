@@ -1,6 +1,6 @@
 %define name dust
 %define version 1.2.3
-%define release 1%{?dist}
+%define release 2%{?dist}
 
 Summary:  A more intuitive version of du in rust
 Name:     %{name}
@@ -11,6 +11,7 @@ URL:      https://github.com/bootandy/dust
 Source0:  https://github.com/bootandy/dust/archive/refs/tags/v%{version}.tar.gz
 
 %define debug_package %{nil}
+%undefine _package_note_file
 
 BuildRequires: curl
 BuildRequires: gcc
