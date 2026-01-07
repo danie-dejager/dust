@@ -17,8 +17,8 @@ Study the above picture.
 
 * We see `target` has 1.8G
 * `target/debug` is the same size as `target` - so we know nearly all the disk usage of the 1.5G is in this folder
-* `target/debug/deps` this is 1.2G - Note the bar jumps down to 70% to indiciate that most disk usage is here but not all.
-* `target/debug/deps/dust-e78c9f87a17f24f3` - This is the largest file in this folder, but it is only 46M - Note the bar jumps down to 3% to indiciate the file is small.
+* `target/debug/deps` this is 1.2G - Note the bar jumps down to 70% to indicate that most disk usage is here but not all.
+* `target/debug/deps/dust-e78c9f87a17f24f3` - This is the largest file in this folder, but it is only 46M - Note the bar jumps down to 3% to indicate the file is small.
 
 From here we can conclude:
  * `target/debug/deps` takes the majority of the space in `target` and that `target/debug/deps` has a large number of relatively small files.
