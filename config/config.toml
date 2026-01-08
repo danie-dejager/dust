@@ -28,3 +28,6 @@ ignore-hidden=true
 output-format="si"
 
 number-of-lines=5   
+
+# To keep the .git directory collapsed
+collapse=[".git"]
