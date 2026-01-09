@@ -38,6 +38,7 @@ pub struct Config {
     pub files0_from: Option<String>,
     pub number_of_lines: Option<usize>,
     pub files_from: Option<String>,
+    pub collapse: Option<Vec<String>>,
 }
 
 impl Config {
@@ -176,6 +177,14 @@ impl Config {
 
     pub fn get_changed_time_operator(&self, options: &Cli) -> Option<(Operator, i64)> {
         get_filter_time_operator(options.ctime.as_ref(), get_current_date_epoch_seconds())
+    }
+
+    pub fn get_collapse(&self, options: &Cli) -> Option<Vec<String>> {
+        if self.collapse.is_none() {
+            options.collapse.clone()
+        } else {
+            self.collapse.clone()
+        }
     }
 }
 
