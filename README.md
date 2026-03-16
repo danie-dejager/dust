@@ -26,7 +26,14 @@ From here we can conclude:
 
 ## Install
 
-#### Cargo <a href="https://repology.org/project/du-dust/versions"><img src="https://repology.org/badge/vertical-allrepos/du-dust.svg" alt="Packaging status" align="right"></a>
+### Quick Install (Linux, macOS, Windows) 
+```bash
+curl -sSfL https://raw.githubusercontent.com/bootandy/dust/refs/heads/master/install.sh | sh
+```
+
+### Cargo <a href="https://repology.org/project/du-dust/versions"><img src="https://repology.org/badge/vertical-allrepos/du-dust.svg" alt="Packaging status" align="right"></a>
+
+#### Cargo
 
 - `cargo install du-dust`
 
