@@ -20,6 +20,7 @@ pub struct Config {
     pub reverse: Option<bool>,
     pub no_colors: Option<bool>,
     pub force_colors: Option<bool>,
+    pub dim: Option<bool>,
     pub no_bars: Option<bool>,
     pub skip_total: Option<bool>,
     pub screen_reader: Option<bool>,
@@ -138,6 +139,9 @@ impl Config {
     pub fn get_bars_on_right(&self, options: &Cli) -> bool {
         Some(true) == self.bars_on_right || options.bars_on_right
     }
+    pub fn get_dim(&self, options: &Cli) -> bool {
+        Some(true) == self.dim || options.dim
+    }
     pub fn get_custom_stack_size(&self, options: &Cli) -> Option<usize> {
         let from_cmd_line = options.stack_size;
         if from_cmd_line.is_none() {
@@ -253,10 +257,11 @@ fn convert_min_size(input: &str) -> Option<usize> {
     }
 }
 
-fn get_config_locations(base: PathBuf) -> Vec<PathBuf> {
+fn get_config_locations(base: PathBuf, config_home: Option<PathBuf>) -> Vec<PathBuf> {
+    let config_home = config_home.unwrap_or_else(|| base.join(".config"));
     vec![
         base.join(".dust.toml"),
-        base.join(".config").join("dust").join("config.toml"),
+        config_home.join("dust").join("config.toml"),
     ]
 }
 
@@ -268,16 +273,20 @@ pub fn get_config(conf_path: Option<&String>) -> Config {
                 match Config::from_config_file(path) {
                     Ok(config) => return config,
                     Err(e) => {
-                        eprintln!("Ignoring invalid config file '{}': {}", &path.display(), e)
+                        eprintln!("Ignoring invalid config file '{}': {}", path.display(), e)
                     }
                 }
             } else {
-                eprintln!("Config file {:?} doesn't exists", &path.display());
+                eprintln!("Config file {:?} doesn't exists", path.display());
             }
         }
         None => {
             if let Some(home) = std::env::home_dir() {
-                for path in get_config_locations(home) {
+                let config_home = std::env::var_os("XDG_CONFIG_HOME")
+                    .filter(|path| !path.is_empty() && Path::new(path).is_absolute())
+                    .map(PathBuf::from);
+
+                for path in get_config_locations(home, config_home) {
                     if path.exists()
                         && let Ok(config) = Config::from_config_file(&path)
                     {
@@ -298,6 +307,27 @@ mod tests {
     use super::*;
     use chrono::{Datelike, Timelike};
     use clap::Parser;
+
+    #[test]
+    fn config_locations_use_xdg_config_home() {
+        let home = PathBuf::from("/home/test");
+        let config_home = PathBuf::from("/tmp/config");
+
+        assert_eq!(
+            get_config_locations(home.clone(), Some(config_home)),
+            vec![
+                home.join(".dust.toml"),
+                PathBuf::from("/tmp/config/dust/config.toml"),
+            ]
+        );
+        assert_eq!(
+            get_config_locations(home.clone(), None),
+            vec![
+                home.join(".dust.toml"),
+                home.join(".config/dust/config.toml"),
+            ]
+        );
+    }
 
     #[test]
     fn test_get_current_date_epoch_seconds() {
