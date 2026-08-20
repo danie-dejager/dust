@@ -1,5 +1,7 @@
 use assert_cmd::cargo_bin_cmd;
+use chrono::{Local, TimeZone};
 use std::ffi::OsStr;
+use std::fs::{FileTimes, OpenOptions};
 use std::str;
 
 /**
@@ -20,6 +22,59 @@ fn build_command<T: AsRef<OsStr>>(command_args: Vec<T>) -> String {
     let finished = &cmd.unwrap();
     assert_eq!(str::from_utf8(&finished.stderr).unwrap(), "");
     str::from_utf8(&finished.stdout).unwrap().into()
+}
+
+#[test]
+fn test_filetime_output_uses_unix_timestamp() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    std::fs::write(temp_dir.path().join("recent.txt"), b"recent").unwrap();
+
+    let mut cmd = cargo_bin_cmd!("dust");
+    let output = cmd
+        .arg("-P")
+        .arg("-c")
+        .arg("--filetime")
+        .arg("modified")
+        .arg(temp_dir.path())
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        str::from_utf8(&output.stderr).unwrap()
+    );
+}
+
+#[test]
+fn test_mtime_filter_uses_unix_timestamp() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let file_path = temp_dir.path().join("yesterday.txt");
+    std::fs::write(&file_path, b"yesterday").unwrap();
+
+    let yesterday = Local::now().date_naive().pred_opt().unwrap();
+    let yesterday_noon = Local
+        .from_local_datetime(&yesterday.and_hms_opt(12, 0, 0).unwrap())
+        .single()
+        .unwrap();
+    let file = OpenOptions::new().write(true).open(&file_path).unwrap();
+    file.set_times(FileTimes::new().set_modified(yesterday_noon.into()))
+        .unwrap();
+
+    let mut cmd = cargo_bin_cmd!("dust");
+    let output = cmd
+        .arg("-P")
+        .arg("-c")
+        .arg("--mtime")
+        .arg("0")
+        .arg(temp_dir.path())
+        .unwrap();
+
+    assert!(output.status.success());
+    assert!(
+        str::from_utf8(&output.stdout)
+            .unwrap()
+            .contains("yesterday.txt")
+    );
 }
 
 // We can at least test the file names are there
@@ -349,6 +404,34 @@ pub fn test_collapse() {
     let output = build_command(vec!["--collapse", "many", "tests/test_dir/"]);
     assert!(output.contains("many"));
     assert!(!output.contains("hello_file"));
+}
+
+// Unix only: on windows the metadata time is a FILETIME (100ns ticks since
+// 1601), not a unix epoch, so `-m` panics in get_pretty_file_modified_time.
+// That is pre-existing and unrelated to this fix.
+#[cfg(target_family = "unix")]
+#[test]
+pub fn test_show_files_by_type_with_filetime() {
+    // When grouping by file type and showing file times, the 'size' of a group is
+    // a timestamp: it must be the newest file's time, not the sum of the times.
+    use std::fs::File;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    let dir = tempfile::Builder::new().tempdir().unwrap();
+
+    // Midday UTC, so the year is the same in every timezone
+    for epoch_seconds in [1593604800, 1625140800, 1656676800] {
+        let file = File::create(dir.path().join(format!("{epoch_seconds}.log"))).unwrap();
+        file.set_modified(UNIX_EPOCH + Duration::from_secs(epoch_seconds))
+            .unwrap();
+    }
+
+    let output = build_command(vec!["-c", "-t", "-m", "m", dir.path().to_str().unwrap()]);
+
+    // 1656676800 is 2022-07-01, the newest of the three
+    assert!(output.contains("2022-07-0"), "{output}");
+    assert!(!output.contains("2020-07-0"), "{output}");
+    assert!(!output.contains("2021-07-0"), "{output}");
 }
 
 #[test]

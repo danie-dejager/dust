@@ -154,13 +154,14 @@ fn main() {
 
     let depth = config.get_depth(&options);
 
-    // If depth is set, then we set the default number_of_lines to be max
+    // If depth is set, or the output is json (which is not rendered to a
+    // terminal), then we set the default number_of_lines to be max
     // instead of screen height
 
     let number_of_lines = match config.get_number_of_lines(&options) {
         Some(val) => val,
         None => {
-            if depth != usize::MAX {
+            if depth != usize::MAX || config.get_output_json(&options) {
                 usize::MAX
             } else {
                 get_height_of_terminal()
@@ -202,7 +203,7 @@ fn main() {
 
     let by_filecount = options.filecount;
     let by_filetime = config.get_filetime(&options);
-    let limit_filesystem = options.limit_filesystem;
+    let limit_filesystem = config.get_limit_filesystem(&options);
     let follow_links = options.dereference_links;
 
     let allowed_filesystems = if limit_filesystem {

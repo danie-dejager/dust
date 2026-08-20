@@ -5,6 +5,7 @@ use regex::Regex;
 use serde::Deserialize;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process;
 
 use crate::cli::Cli;
 use crate::dir_walker::Operator;
@@ -25,6 +26,7 @@ pub struct Config {
     pub skip_total: Option<bool>,
     pub screen_reader: Option<bool>,
     pub ignore_hidden: Option<bool>,
+    pub limit_filesystem: Option<bool>,
     pub output_format: Option<String>,
     pub min_size: Option<String>,
     pub only_dir: Option<bool>,
@@ -72,6 +74,9 @@ impl Config {
     }
     pub fn get_ignore_hidden(&self, options: &Cli) -> bool {
         Some(true) == self.ignore_hidden || options.ignore_hidden
+    }
+    pub fn get_limit_filesystem(&self, options: &Cli) -> bool {
+        Some(true) == self.limit_filesystem || options.limit_filesystem
     }
     pub fn get_full_paths(&self, options: &Cli) -> bool {
         Some(true) == self.display_full_paths || options.full_paths
@@ -184,10 +189,11 @@ impl Config {
     }
 
     pub fn get_collapse(&self, options: &Cli) -> Option<Vec<String>> {
-        if self.collapse.is_none() {
-            options.collapse.clone()
-        } else {
+        // command line wins, as in get_threads and get_number_of_lines
+        if options.collapse.is_none() {
             self.collapse.clone()
+        } else {
+            options.collapse.clone()
         }
     }
 }
@@ -210,13 +216,16 @@ fn get_filter_time_operator(
 ) -> Option<(Operator, i64)> {
     match option_value {
         Some(val) => {
-            let time = current_date_epoch_seconds
-                - val
-                    .parse::<i64>()
-                    .unwrap_or_else(|_| panic!("invalid data format"))
-                    .abs()
-                    * DAY_SECONDS;
-            match val.chars().next().expect("Value should not be empty") {
+            let days = val.parse::<i64>().unwrap_or_else(|_| {
+                eprintln!("Invalid value for time filter: {val:?}");
+                process::exit(1)
+            });
+            let time = current_date_epoch_seconds - days.abs() * DAY_SECONDS;
+            // the parse above rejects an empty string, so there is a first char
+            match val.chars().next().unwrap_or_else(|| {
+                eprintln!("Invalid value for time filter: {val:?}");
+                process::exit(1)
+            }) {
                 '+' => Some((Operator::LessThan, time - DAY_SECONDS)),
                 '-' => Some((Operator::GreaterThan, time)),
                 _ => Some((Operator::Equal, time - DAY_SECONDS)),
@@ -466,5 +475,38 @@ mod tests {
         };
         let args = get_args(vec!["dust", "--number-of-lines", "5"]);
         assert_eq!(c.get_number_of_lines(&args), Some(5));
+    }
+
+    #[test]
+    fn test_get_number_of_lines_with_output_json() {
+        // Json output and no number-of-lines: main defaults this to usize::MAX.
+        let c = Config::default();
+        let args = get_args(vec!["dust", "--output-json"]);
+        assert!(c.get_output_json(&args));
+        assert_eq!(c.get_number_of_lines(&args), None);
+
+        // Json output from config and no number-of-lines.
+        let c = Config {
+            output_json: Some(true),
+            ..Default::default()
+        };
+        let args = get_args(vec![]);
+        assert!(c.get_output_json(&args));
+        assert_eq!(c.get_number_of_lines(&args), None);
+
+        // An explicit number-of-lines still wins over the json default.
+        let c = Config::default();
+        let args = get_args(vec!["dust", "--output-json", "--number-of-lines", "5"]);
+        assert!(c.get_output_json(&args));
+        assert_eq!(c.get_number_of_lines(&args), Some(5));
+
+        // A number-of-lines from the config file also wins.
+        let c = Config {
+            number_of_lines: Some(3),
+            ..Default::default()
+        };
+        let args = get_args(vec!["dust", "--output-json"]);
+        assert!(c.get_output_json(&args));
+        assert_eq!(c.get_number_of_lines(&args), Some(3));
     }
 }
