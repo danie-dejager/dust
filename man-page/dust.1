@@ -1,6 +1,6 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH Dust 1  "Dust 1.2.5" 
+.TH Dust 1  "Dust 1.2.6" 
 .SH NAME
 Dust \- Like du but more intuitive
 .SH SYNOPSIS
@@ -126,7 +126,7 @@ tb: terabyte (TB)
 .RE
 .TP
 \fB\-S\fR, \fB\-\-stack\-size\fR \fI<STACK_SIZE>\fR
-Specify memory to use as stack size \- use if you see: \*(Aqfatal runtime error: stack overflow\*(Aq (default low memory=1048576, high memory=1073741824)
+Deprecated. The walker no longer recurses so a custom stack size is unnecessary. Accepted for compatibility but the value is ignored
 .TP
 \fB\-j\fR, \fB\-\-output\-json\fR
 Output the directory tree as json to the current directory
@@ -173,4 +173,4 @@ Print version
 [\fIPATH\fR]
 Input files or directories
 .SH VERSION
-v1.2.5
+v1.2.6
